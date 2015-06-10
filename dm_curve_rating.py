@@ -46,25 +46,37 @@ cands.append(pfd("noise5.pfd"))
 for cand in cands:
     cand.dedisperse(interp=1)
 
-#n_dm_bins = 100
-
 # based on the plot_chi2_vs_DM code in the prepfold.pfd class
 def dm_curve_check(cand, spec_index=0.):
     # Sum the profiles in time
     profs = cand.profs.sum(0)
 
-    # Generate simulated profiles
+    ### Generate simulated profiles ###
+
+    # prof_avg: median profile value per subint per subband
+    #  Sum over subint axis to get median per subband
     prof_avg = cand.stats[:,:,4].sum(0)
+    # prof_var: variance of profile per subint per subband
+    #  Sum over subint axis to get variance per subband
     prof_var = cand.stats[:,:,5].sum(0)
+    # The standard deviation in each subband is proportional to the median
+    # value of that subband.  Here we scale all subbands to equal levels.
     scaled_vars = prof_var / prof_avg**2
     scaled_profs = (profs.T / prof_avg).T - 1.
+    # The mean profile (after scaling) will be our "clean" profile--hardly
+    # true in most cases, but we pretend it's noiseless for what follows
     scaled_mean_prof = scaled_profs.mean(0)
+    # Extend this "clean" profile across the number of subbands
     sim_profs_clean = np.tile(scaled_mean_prof,\
         scaled_profs.shape[0]).reshape(scaled_profs.shape)
+    # Scale these subbands according to the input spectral index
     spec_mult = (cand.subfreqs/cand.subfreqs[0])**spec_index
     spec_mult /= spec_mult.mean()
     sim_profs_spec = (sim_profs_clean.T*spec_mult).T
+    # For consistency, set a seed for generating noise
     np.random.seed(1967)
+    # Add white noise that matches the variance of the real subbands
+    # on a subband by subband basis
     noise = np.random.normal(scale=np.sqrt(scaled_vars),\
         size=scaled_profs.T.shape).T
     # sim_profs_noisy is the simulated equivalent of scaled_profs
@@ -72,8 +84,13 @@ def dm_curve_check(cand, spec_index=0.):
     # sim_profs_final is the simulated equivalent of profs
     sim_profs_final = ((sim_profs_noisy + 1.).T * prof_avg).T
     
+    # Make a copy that can be manipulated since we want to return
+    # sim_profs_final at the end
     sim_profs = sim_profs_final.copy()
 
+    # The rest of this is essentially code from the prepfold.pfd class
+    # in which we loop over DM values and see how strong a signal we
+    # get by dedispersing at each of these values
     DMs = np.linspace(cand.dms[0], cand.dms[-1], len(cand.dms)/10)
     chis = np.zeros_like(DMs)
     sim_chis = np.zeros_like(DMs)
@@ -89,12 +106,17 @@ def dm_curve_check(cand, spec_index=0.):
             sim_profs[jj] = psr_utils.rotate(sim_profs[jj],\
                 int(new_subdelays_bins[jj]))
         subdelays_bins += new_subdelays_bins
+        # The set of reduced chi2s like those in the prepfold plot
+        # (should be the same if the same DMs are used)
         chis[ii] = cand.calc_redchi2(prof=profs.sum(0), avg=cand.avgprof)
+        # The same thing but for our "simulated" data
         sim_chis[ii] = cand.calc_redchi2(prof=sim_profs.sum(0), avg=cand.avgprof)
     return DMs, chis, sim_chis, sim_profs_final
 
 def dm_curve_diff(spec_index, cand):
     dms, dmcurve, fdmcurve, sim_profs = dm_curve_check(cand, spec_index)
+    # I'm not quite sure whether to use the variance of both curves or just
+    # one of them...
     var1 = 4./cand.DOFcor * dmcurve
     #var2 = 4./cand.DOFcor * fdmcurve
     return (dmcurve - fdmcurve) / np.sqrt(var1)
