@@ -1,7 +1,6 @@
 import numpy as np
 import pylab as plt
 from matplotlib.cm import Greys
-from sp_utils import ddm_response
 from prepfold import pfd
 import psr_utils
 from scipy.optimize import leastsq
