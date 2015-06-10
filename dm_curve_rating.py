@@ -117,15 +117,28 @@ def dm_curve_diff(spec_index, cand):
     dms, dmcurve, fdmcurve, sim_profs = dm_curve_check(cand, spec_index)
     # I'm not quite sure whether to use the variance of both curves or just
     # one of them...
+
+    # This variance comes from basic error propagation through the
+    # pfd.calc_redchi2 function
     var1 = 4./cand.DOFcor * dmcurve
+
     #var2 = 4./cand.DOFcor * fdmcurve
+
     return (dmcurve - fdmcurve) / np.sqrt(var1)
 
 def find_spec_index(cand):
+    """
+    Run a least squares fit to find the "spectral index" that gives the
+    best match between real and simulated DM curves
+    """
     fit = leastsq(dm_curve_diff, 0, cand, full_output=True)
     return fit[0][0]
 
 def calc_prepfold_sigma(cand):
+    """
+    This won't work unless a .bestprof file is present (they can be
+    regenerated using show_pfd)
+    """
     try:
         red_chi2 = cand.bestprof.chi_sqr
         dof = cand.proflen - 1
